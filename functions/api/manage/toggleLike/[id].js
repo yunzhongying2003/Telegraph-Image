@@ -1,22 +1,33 @@
+import { extractKey, isShortId } from "../../../utils/helpers";
+
+/**
+ * GET /api/manage/toggleLike/{id} — 切换点赞状态
+ */
 export async function onRequest(context) {
     const { params, env } = context;
+    const key = extractKey(params.id);
+    if (!key) return new Response('Invalid ID', { status: 400 });
 
-    console.log("Request ID:", params.id);
+    try {
+        if (isShortId(key)) {
+            const record = await env.img_url.getWithMetadata(key);
+            if (record && record.metadata) {
+                record.metadata.liked = !record.metadata.liked;
+                await env.img_url.put(key, '', { metadata: record.metadata });
+                return new Response(String(record.metadata.liked));
+            }
+            return new Response('Not found', { status: 404 });
+        }
 
-    // 获取元数据
-    const value = await env.img_url.getWithMetadata(params.id);
-    console.log("Current metadata:", value);
-
-    // 如果记录不存在
-    if (!value.metadata) return new Response(`Image metadata not found for ID: ${params.id}`, { status: 404 });
-
-    // 切换 liked 状态并更新
-    value.metadata.liked = !value.metadata.liked;
-    await env.img_url.put(params.id, "", { metadata: value.metadata });
-
-    console.log("Updated metadata:", value.metadata);
-
-    return new Response(JSON.stringify({ success: true, liked: value.metadata.liked }), {
-        headers: { 'Content-Type': 'application/json' },
-    });
+        const record = await env.img_url.getWithMetadata(key);
+        if (record && record.metadata) {
+            record.metadata.liked = !record.metadata.liked;
+            await env.img_url.put(key, '', { metadata: record.metadata });
+            return new Response(String(record.metadata.liked));
+        }
+        return new Response('Not found', { status: 404 });
+    } catch (e) {
+        console.error('ToggleLike error:', e);
+        return new Response('Internal error', { status: 500 });
+    }
 }

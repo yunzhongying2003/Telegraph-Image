@@ -1,358 +1,460 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <!-- import CSS -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15.3/lib/theme-chalk/index.css"
-    integrity="sha256-ghr1zmXTODLKl1HULQd6fq1MIe7m3FJiNTOCT8sddLM=" crossorigin="anonymous">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>图床管理 · Telegraph-Image</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            dark: { 50: '#f8fafc', 100: '#1e1e2e', 200: '#181825', 300: '#11111b', 400: '#0a0a14', 500: '#050510' },
+            accent: { 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5' },
+          }
+        }
+      }
+    }
+  </script>
   <style>
-    .el-image__inner.el-image__inner {
-      width: 100%;
-      height: 90px;
-    }
-
-    .el-image {
-      text-align: center;
-    }
-
-    .el-button+.el-button {
-      margin: 0;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .dark body { background: #11111b; color: #e2e8f0; }
+    .grid-masonry { columns: 4 240px; column-gap: 16px; }
+    .grid-masonry > * { break-inside: avoid; margin-bottom: 16px; }
+    @media (max-width: 1024px) { .grid-masonry { columns: 3 200px; } }
+    @media (max-width: 768px) { .grid-masonry { columns: 2 160px; } }
+    @media (max-width: 480px) { .grid-masonry { columns: 1; } }
+    .img-card { transition: transform 0.15s, box-shadow 0.15s; }
+    .img-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    .img-card .actions { opacity: 0; transition: opacity 0.15s; }
+    .img-card:hover .actions { opacity: 1; }
+    .modal-overlay { background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); }
+    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 9999; padding: 12px 24px; border-radius: 8px; font-size: 14px; animation: fadeInUp 0.2s ease; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateX(-50%) translateY(16px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+    .spinner { border: 2px solid rgba(255,255,255,0.1); border-top: 2px solid #6366f1; border-radius: 50%; width: 20px; height: 20px; animation: spin 0.8s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
+    .badge-normal { background: #1e293b; color: #94a3b8; }
+    .badge-blocked { background: #7f1d1d; color: #fca5a5; }
+    .badge-white { background: #14532d; color: #86efac; }
   </style>
-  <script src="https://js.sentry-cdn.com/219f636ac7bde5edab2c3e16885cb535.min.js" crossorigin="anonymous"></script>
 </head>
+<body class="bg-[#11111b] text-gray-200 min-h-screen">
 
-<body>
-  <div id="app">
-    <el-container>
-      <el-header>
-        <div style="
-         margin: auto;
-         line-height: 60px;
-         font-size: xx-large;
-         position: relative;
-     ">Dashboard
+<div id="app" class="hidden">
+  <!-- ── 导航栏 ── -->
+  <nav class="sticky top-0 z-50 bg-[#1e1e2e]/95 backdrop-blur border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="text-xl font-bold text-accent-400">📷</span>
+        <span class="text-lg font-semibold text-gray-100">图床管理</span>
+        <span class="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{{ stats.total || 0 }} 张</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="refreshList()" class="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-gray-200 transition" title="刷新">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
+        <button onclick="logout()" class="px-3 py-1.5 text-sm rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 transition">退出</button>
+      </div>
+    </div>
+  </nav>
 
-
-          <span style="
-     position: absolute;
-     right: 0px;
-      ">
-            <a href="./admin-imgtc.html">
-              <el-button size="mini" type="warning">网格视图</el-button>
-            </a>
-            <a href="./admin-waterfall.html">
-              <el-button size="mini" type="primary">瀑布流</el-button>
-            </a>
-            <el-button v-if="showLogoutButton" size="mini" type="info" @click="handleLogout()">退出登录</el-button></span>
-        </div>
-      </el-header>
-      <el-main><el-row :gutter="12">
-          <el-col :span="24">
-            <el-card shadow="always">
-              记录总数量:
-              {{ Number }}
-            </el-card>
-          </el-col>
-          <!--<el-col :span="8">
-              <el-card shadow="hover">
-                <el-tooltip class="item" effect="dark" content="白名单数量" placement="top-start">
-                   
-                </el-tooltip>
-                白名单数量：{{ WhiteList }}
-              </el-card>
-            </el-col>
-            <el-col :span="8">
-              <el-card shadow="hover">
-                <el-tooltip class="item" effect="dark" content="黑名单数量" placement="top-start">
-                
-              </el-tooltip>
-              黑名单数量：{{ BlackList }}
-              </el-card>
-            </el-col>-->
-        </el-row>
-        <template>
-          <el-table :data="tableData.filter(data => !search || data.name.toLowerCase().includes(search.toLowerCase()))"
-            style="width: 100%">
-            <el-table-column label="name" prop="name">
-            </el-table-column>
-            <el-table-column label="preview" prop="preview" align="center">
-              <template slot-scope="scope">
-                <video v-if="scope.row.name.indexOf('.mp4')>0" style="width: 100%; height: 180px;" controls>
-                  <source :src="'/file/'+scope.row.name" type="video/mp4">
-                </video>
-                <el-image v-else style="width: 100%; height: 100%;" :src="'/file/'+scope.row.name" :zoom-rate="1.2"
-                  :preview-src-list="['/file/'+scope.row.name]" fit="cover" lazy />
-
-              </template>
-            </el-table-column>
-            <el-table-column label="data" prop="data">
-              <template slot-scope="scope">
-                <el-popover trigger="hover" placement="top">
-                  <p>{{ scope.row.metadata }}</p>
-                  <div slot="reference" class="name-wrapper">
-                    <el-tag size="medium">{{ scope.row.metadata }}</el-tag>
-                  </div>
-                </el-popover>
-              </template>
-            </el-table-column>
-            <el-table-column align="right">
-              <template slot="header" slot-scope="scope">
-                <el-input v-model="search" @input="handleSearch" size="mini" placeholder="输入关键字搜索" />
-              </template>
-              <template slot-scope="scope">
-                <el-button size="mini" type="primary" @click="handleCopy(scope.$index,scope.row.name)">复制地址</el-button>
-                <el-button size="mini" type="primary" @click="handleWhite(scope.$index,scope.row.name)">白名单</el-button>
-                <el-button size="mini" type="info" @click="handleBlock(scope.$index,scope.row.name)">黑名单</el-button>
-                <el-button size="mini" type="danger" @click="handleDelete(scope.$index,scope.row.name)">删除</el-button>
-              </template>
-            </el-table-column>
-            </el-table>
-            <el-button v-if="nextCursor" style="margin-top:16px" @click="loadMore">加载更多</el-button>
-          </template>
-        </el-main>
-    </el-container>
+  <!-- ── 统计面板 ── -->
+  <div class="max-w-7xl mx-auto px-4 py-6">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-[#1e1e2e] rounded-xl p-4 border border-gray-800">
+        <div class="text-xs text-gray-500 mb-1">总图片数</div>
+        <div class="text-2xl font-bold text-gray-100">{{ stats.total || 0 }}</div>
+      </div>
+      <div class="bg-[#1e1e2e] rounded-xl p-4 border border-gray-800">
+        <div class="text-xs text-gray-500 mb-1">今日上传</div>
+        <div class="text-2xl font-bold text-accent-400">{{ stats.today || 0 }}</div>
+      </div>
+      <div class="bg-[#1e1e2e] rounded-xl p-4 border border-gray-800">
+        <div class="text-xs text-gray-500 mb-1">已封禁</div>
+        <div class="text-2xl font-bold text-red-400">{{ stats.blocked || 0 }}</div>
+      </div>
+      <div class="bg-[#1e1e2e] rounded-xl p-4 border border-gray-800">
+        <div class="text-xs text-gray-500 mb-1">白名单</div>
+        <div class="text-2xl font-bold text-green-400">{{ stats.whitelisted || 0 }}</div>
+      </div>
+    </div>
   </div>
-</body>
-<!-- import Vue before Element -->
-<script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"
-  integrity="sha256-kXTEJcRFN330VirZFl6gj9+UM6gIKW195fYZeR3xDhc=" crossorigin="anonymous"></script>
-<!-- import JavaScript -->
-<script src="https://cdn.jsdelivr.net/npm/element-ui@2.15.3/lib/index.js"
-  integrity="sha256-OFVFYfqhQ9nDnKh+NfIsefpy/fnjTwkK909ZYgo45nw=" crossorigin="anonymous"></script>
+
+  <!-- ── 搜索栏 ── -->
+  <div class="max-w-7xl mx-auto px-4 pb-4">
+    <div class="flex gap-3">
+      <input id="searchInput" type="text" placeholder="搜索文件名或 ID..." 
+             class="flex-1 bg-[#1e1e2e] border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent-500/50 transition"
+             oninput="debounceSearch()">
+      <button onclick="refreshList()" class="px-5 py-2.5 bg-accent-600 hover:bg-accent-500 text-white text-sm font-medium rounded-xl transition">搜索</button>
+    </div>
+  </div>
+
+  <!-- ── 图片网格 ── -->
+  <div class="max-w-7xl mx-auto px-4 pb-8">
+    <div v-if="loading" class="flex justify-center py-16">
+      <div class="spinner" style="width: 32px; height: 32px;"></div>
+    </div>
+    <div v-else-if="images.length === 0" class="text-center py-16 text-gray-600">
+      <div class="text-4xl mb-3">📭</div>
+      <div class="text-sm">暂无图片</div>
+    </div>
+    <div v-else class="grid-masonry">
+      <div v-for="(img, idx) in images" :key="img.name" class="img-card bg-[#1e1e2e] rounded-xl overflow-hidden border border-gray-800/60 relative group">
+        <!-- 缩略图 -->
+        <div class="relative cursor-pointer" onclick="previewImage('{{ img.name }}')">
+          <img :src="'/file/' + img.name" :alt="img.meta?.file_name || img.name" class="w-full h-auto" loading="lazy"
+               onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'flex items-center justify-center h-32 text-gray-600 text-sm\\'>加载失败</div>'">
+          <div class="absolute top-2 left-2 flex gap-1">
+            <span v-if="img.meta?.list_type === 'Block'" class="badge badge-blocked">封禁</span>
+            <span v-else-if="img.meta?.list_type === 'White'" class="badge badge-white">白名单</span>
+            <span v-else class="badge badge-normal">{{ img.meta?.label || 'normal' }}</span>
+          </div>
+        </div>
+        <!-- 信息 -->
+        <div class="p-3">
+          <div class="text-xs text-gray-400 truncate mb-2" :title="img.meta?.file_name || img.name">
+            {{ img.meta?.file_name || img.name }}
+          </div>
+          <div class="flex justify-between text-xs text-gray-600">
+            <span>{{ formatSize(img.meta?.file_size) }}</span>
+            <span>{{ formatTime(img.meta?.timestamp) }}</span>
+          </div>
+          <!-- 操作按钮 -->
+          <div class="actions flex gap-1 mt-2 pt-2 border-t border-gray-800/60">
+            <button onclick="copyUrl('{{ img.name }}')" class="flex-1 py-1.5 text-xs rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition">复制</button>
+            <button v-if="img.meta?.list_type !== 'White'" onclick="setWhite('{{ img.name }}')" class="flex-1 py-1.5 text-xs rounded-lg bg-green-900/30 hover:bg-green-900/50 text-green-400 transition">白名单</button>
+            <button v-if="img.meta?.list_type !== 'Block'" onclick="setBlock('{{ img.name }}')" class="flex-1 py-1.5 text-xs rounded-lg bg-red-900/30 hover:bg-red-900/50 text-red-400 transition">封禁</button>
+            <button onclick="deleteImage('{{ img.name }}')" class="flex-1 py-1.5 text-xs rounded-lg bg-gray-800 hover:bg-red-900/50 text-gray-400 hover:text-red-400 transition">删除</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 加载更多 -->
+    <div v-if="cursor" class="text-center py-6">
+      <button onclick="loadMore()" class="px-6 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm rounded-xl transition">
+        <span v-if="loadingMore">加载中...</span>
+        <span v-else>加载更多</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 预览模态框 ── -->
+<div id="previewModal" class="fixed inset-0 z-50 hidden modal-overlay flex items-center justify-center p-4" onclick="closePreview(event)">
+  <div class="max-w-4xl max-h-[90vh] relative" onclick="event.stopPropagation()">
+    <img id="previewImg" src="" class="max-w-full max-h-[85vh] rounded-xl shadow-2xl" alt="preview">
+    <button onclick="closePreview()" class="absolute -top-3 -right-3 w-8 h-8 bg-gray-800 hover:bg-gray-700 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition shadow-lg">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- ── Toast ── -->
+<div id="toast" class="toast hidden"></div>
+
 <script>
-  var app = new Vue({
-    el: '#app',
-    data: {
-      Number: 0,
-      WhiteList: 0,
-        BlackList: 0,
-        showLogoutButton: false,
-        tableData: [],
-        nextCursor: null,
-      dialogFormVisible: false,
-      formLabelWidth: '120px',
-      form: {
-        name: '',
-        id: ''
-      },
-      search: '',
-      password: '123456',
-      searchTimer: null
-    },
-    methods: {
-      handleBlock(index, key) {
-        console.log(key);
-        if (confirm("确认加入黑名单吗?")) {
-          console.log("Yes")
-          var requestOptions = {
-            method: 'GET',
-            redirect: 'follow',
-            //include authorization credientials
-            credentials: 'include'
-          };
+// ─── 状态 ───
+const state = {
+  images: [],
+  cursor: null,
+  loading: true,
+  loadingMore: false,
+  stats: { total: 0, today: 0, blocked: 0, whitelisted: 0, kv_keys: 0 },
+  searchTimer: null,
+};
 
-          fetch("./api/manage/block/" + key, requestOptions)
-            .then(response => response.text())
-            .then(result => {
-              console.log(result);
-              this.tableData[index].metadata = result;
-            })
-            .catch(error => { alert("An error occurred while synchronizing data with the server, please check the network connection"); console.log('error', error) });
+// ─── 渲染引擎（简易响应式） ───
+function render() {
+  const app = document.getElementById('app');
+  app.classList.remove('hidden');
+  
+  // 简化模板渲染（用字符串模板替代）
+  renderStats();
+  renderImages();
+  renderLoadMore();
+}
 
-        } else {
-          console.log("No")
-        }
-      },
-      handleDelete(index, key) {
-        console.log(key);
-        if (confirm("确认删除该条记录吗?")) {
-          console.log("Yes")
-          var requestOptions = {
-            method: 'GET',
-            redirect: 'follow',
-            //include authorization credientials
-            credentials: 'include'
-          };
+function renderStats() {
+  const cards = document.querySelectorAll('.grid.grid-cols-2.md\\:grid-cols-4 > div');
+  if (cards.length >= 4) {
+    cards[0].querySelector('.text-2xl').textContent = state.stats.total || 0;
+    cards[1].querySelector('.text-2xl').textContent = state.stats.today || 0;
+    cards[2].querySelector('.text-2xl').textContent = state.stats.blocked || 0;
+    cards[3].querySelector('.text-2xl').textContent = state.stats.whitelisted || 0;
+  }
+  document.querySelector('nav .text-xs.rounded-full').textContent = `${state.stats.total || 0} 张`;
+}
 
-          fetch("./api/manage/delete/" + key, requestOptions)
-            .then(response => response.text())
-            .then(result => { console.log(result); this.tableData.remove(index); })
-            .catch(error => { alert("An error occurred while synchronizing data with the server, please check the network connection"); console.log('error', error) });
+function renderImages() {
+  const grid = document.querySelector('.grid-masonry');
+  const loading = document.querySelector('.flex.justify-center.py-16');
+  const empty = document.querySelector('.text-center.py-16');
+  
+  if (state.loading) {
+    if (loading) loading.classList.remove('hidden');
+    if (grid) grid.innerHTML = '';
+    if (empty) empty.classList.add('hidden');
+    return;
+  }
+  
+  if (loading) loading.classList.add('hidden');
+  
+  if (state.images.length === 0) {
+    if (empty) empty.classList.remove('hidden');
+    if (grid) grid.innerHTML = '';
+    return;
+  }
+  
+  if (empty) empty.classList.add('hidden');
+  if (!grid) return;
+  
+  let html = '';
+  for (const img of state.images) {
+    const meta = img.metadata || {};
+    let metaObj = {};
+    try { metaObj = typeof meta === 'string' ? JSON.parse(meta) : meta; } catch(e) {}
+    const listType = metaObj.list_type || '';
+    const label = metaObj.label || 'normal';
+    const fileName = metaObj.file_name || img.name;
+    const fileSize = metaObj.file_size || 0;
+    const timestamp = metaObj.timestamp || 0;
+    
+    const badgeClass = listType === 'Block' ? 'badge-blocked' : (listType === 'White' ? 'badge-white' : 'badge-normal');
+    const badgeText = listType === 'Block' ? '封禁' : (listType === 'White' ? '白名单' : label);
+    
+    const nameEscaped = img.name.replace(/'/g, "\\'");
+    
+    html += `<div class="img-card bg-[#1e1e2e] rounded-xl overflow-hidden border border-gray-800/60 relative group">
+      <div class="relative cursor-pointer" onclick="previewImage('${nameEscaped}')">
+        <img src="/file/${nameEscaped}" alt="${fileName}" class="w-full h-auto" loading="lazy"
+             onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'flex items-center justify-center h-32 text-gray-600 text-sm\\'>加载失败</div>'">
+        <div class="absolute top-2 left-2 flex gap-1">
+          <span class="badge ${badgeClass}">${badgeText}</span>
+        </div>
+      </div>
+      <div class="p-3">
+        <div class="text-xs text-gray-400 truncate mb-2" title="${fileName}">${fileName}</div>
+        <div class="flex justify-between text-xs text-gray-600">
+          <span>${formatSize(fileSize)}</span>
+          <span>${formatTime(timestamp)}</span>
+        </div>
+        <div class="actions flex gap-1 mt-2 pt-2 border-t border-gray-800/60">
+          <button onclick="copyUrl('${nameEscaped}')" class="flex-1 py-1.5 text-xs rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition">复制</button>
+          ${listType !== 'White' ? `<button onclick="setWhite('${nameEscaped}')" class="flex-1 py-1.5 text-xs rounded-lg bg-green-900/30 hover:bg-green-900/50 text-green-400 transition">白名单</button>` : ''}
+          ${listType !== 'Block' ? `<button onclick="setBlock('${nameEscaped}')" class="flex-1 py-1.5 text-xs rounded-lg bg-red-900/30 hover:bg-red-900/50 text-red-400 transition">封禁</button>` : ''}
+          <button onclick="deleteImage('${nameEscaped}')" class="flex-1 py-1.5 text-xs rounded-lg bg-gray-800 hover:bg-red-900/50 text-gray-400 hover:text-red-400 transition">删除</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  grid.innerHTML = html;
+  renderLoadMore();
+}
 
-        } else {
-          console.log("No")
-        }
-      },
-      handleWhite(index, key) {
-        console.log(key);
-        if (confirm("确认加入白名单吗?")) {
-          console.log("Yes")
-          var requestOptions = {
-            method: 'GET',
-            redirect: 'follow',
-            //include authorization credientials
-            credentials: 'include'
-          };
-          fetch("./api/manage/white/" + key, requestOptions)
-            .then(response => response.text())
-            .then(result => { console.log(result); this.tableData[index].metadata = result; })
-            .catch(error => { alert("An error occurred while synchronizing data with the server, please check the network connection"); console.log('error', error) });
+function renderLoadMore() {
+  const container = document.querySelector('.text-center.py-6');
+  if (!container) return;
+  if (state.cursor) {
+    container.classList.remove('hidden');
+    container.querySelector('button').textContent = state.loadingMore ? '加载中...' : '加载更多';
+  } else {
+    container.classList.add('hidden');
+  }
+}
 
-        } else {
-          console.log("No")
-        }
-
-      },
-      handleLogout() {
-        window.location.href = "./api/manage/logout";
-      },
-      handleCopy(index, key) {
-        const text = `${document.location.origin}/file/${key}`;
-        if (navigator.clipboard) {
-          // clipboard api 复制
-          navigator.clipboard.writeText(text);
-        } else {
-          const textarea = document.createElement('textarea');
-          document.body.appendChild(textarea);
-          // 隐藏此输入框
-          textarea.style.position = 'fixed';
-          textarea.style.clip = 'rect(0 0 0 0)';
-          textarea.style.top = '10px';
-          // 赋值
-          textarea.value = text;
-          // 选中
-          textarea.select();
-          // 复制
-          document.execCommand('copy', true);
-          // 移除输入框
-          document.body.removeChild(textarea);
-        }
-        this.$message({
-          message: '复制文件链接成功~',
-          type: 'success'
-        });
-      },
-      handleSearch() {
-        clearTimeout(this.searchTimer);
-        this.searchTimer = setTimeout(() => {
-          this.tableData = [];
-          this.nextCursor = null;
-          const opts = { method: 'GET', redirect: 'follow', credentials: 'include' };
-          const base = this.search
-            ? `./api/manage/list?limit=100&prefix=${encodeURIComponent(this.search)}`
-            : `./api/manage/list?limit=100`;
-          fetch(base, opts)
-            .then(r => r.json())
-            .then(result => {
-              this.tableData = result.keys || [];
-              this.nextCursor = result.list_complete ? null : result.cursor;
-              this.Number = this.tableData.length;
-            })
-            .catch(() => alert("搜索失败，请检查网络"));
-        }, 300);
-      },
-      loadMore() {
-        const opts = { method: 'GET', redirect: 'follow', credentials: 'include' };
-        const base = this.search
-          ? `./api/manage/list?limit=100&prefix=${encodeURIComponent(this.search)}`
-          : `./api/manage/list?limit=100`;
-        const url = this.nextCursor
-          ? `${base}&cursor=${encodeURIComponent(this.nextCursor)}`
-          : base;
-
-        fetch(url, opts)
-          .then(r => r.json())
-          .then(result => {
-            this.tableData = this.tableData.concat(result.keys || []);
-            this.nextCursor = result.list_complete ? null : result.cursor;
-            this.Number = this.tableData.length;
-          })
-          .catch(() => alert("同步失败，请检查网络"));
-      },
-    },
-
-    mounted() {
-      //check if the user is logged in
-      //read the basic auth credientials from the browser
-      var requestOptions = {
-        method: 'GET',
-        redirect: 'follow',
-        //include authorization credientials
-        credentials: 'include'
-      };
-      fetch("./api/manage/check", requestOptions)
-        .then(response => response.text())
-        .then(result => {
-          console.log(result);
-          if (result == "true") {
-            this.showLogoutButton = true;
-          } else if (result == "Not using basic auth.") {
-
-          }
-          else {
-            window.location.href = "./api/manage/login";
-          }
-        })
-        .catch(error => { alert("An error occurred while synchronizing data with the server, please check the network connection"); console.log('error', error) });
-
-
-
-      Array.prototype.remove = function (from, to) {
-        var rest = this.slice((to || from) + 1 || this.length);
-        this.length = from < 0 ? this.length + from : from;
-        return this.push.apply(this, rest);
-      };
-      var requestOptions = {
-        method: 'GET',
-        redirect: 'follow',
-        //include authorization credientials
-        credentials: 'include'
-
-      };
-
-
-        fetch("./api/manage/list?limit=100", requestOptions)
-        //判断是否需要登录
-        .then(response => {
-          if (response.status == 401) {
-            alert("请先登录");
-            window.location.href = "./api/manage/login";
-          }
-          else {
-            return response;
-          }
-        })
-        .then(response => response.json())
-        .then(result => {
-          this.tableData = result.keys || [];
-          this.nextCursor = result.list_complete ? null : result.cursor;
-          console.log(result);
-          this.Number = this.tableData.length;
-        })
-        .catch(error => { alert("An error occurred while synchronizing data with the server, please check the network connection"); console.log('error', error) });
-
+// ─── API 调用 ───
+async function apiGet(path) {
+  try {
+    const res = await fetch(path, { credentials: 'include' });
+    if (res.status === 401) {
+      window.location.href = './api/manage/login';
+      return null;
     }
-  })
+    return await res.json();
+  } catch (e) {
+    toast('请求失败: ' + e.message, 'error');
+    return null;
+  }
+}
 
-</script><!-- Hotjar Tracking Code -->
-<script>
-    (function (h, o, t, j, a, r) {
-      h.hj = h.hj || function () { (h.hj.q = h.hj.q || []).push(arguments) };
-      h._hjSettings = { hjid: 2531461, hjsv: 6 };
-      a = o.getElementsByTagName('head')[0];
-      r = o.createElement('script'); r.async = 1;
-      r.src = t + h._hjSettings.hjid + j + h._hjSettings.hjsv;
-      a.appendChild(r);
-    })(window, document, 'https://static.hotjar.com/c/hotjar-', '.js?sv=');
-</script>
-<script type="text/javascript">
-  (function (c, l, a, r, i, t, y) {
-    c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments) };
-    t = l.createElement(r); t.async = 1; t.src = "https://www.clarity.ms/tag/" + i;
-    y = l.getElementsByTagName(r)[0]; y.parentNode.insertBefore(t, y);
-  })(window, document, "clarity", "script", "7t5ai7agat");
-</script>
+async function apiGetText(path) {
+  try {
+    const res = await fetch(path, { credentials: 'include' });
+    if (res.status === 401) {
+      window.location.href = './api/manage/login';
+      return null;
+    }
+    return await res.text();
+  } catch (e) {
+    toast('请求失败: ' + e.message, 'error');
+    return null;
+  }
+}
 
+// ─── 数据加载 ───
+async function loadStats() {
+  const data = await apiGet('./api/manage/stats');
+  if (data) {
+    state.stats = data;
+    renderStats();
+    document.querySelector('nav .text-xs.rounded-full').textContent = `${state.stats.total || 0} 张`;
+  }
+}
+
+async function loadImages(append = false) {
+  if (!append) state.loading = true;
+  else state.loadingMore = true;
+  render();
+  
+  const search = document.getElementById('searchInput')?.value?.trim() || '';
+  let url = `./api/manage/list?limit=50`;
+  if (search) url += `&prefix=${encodeURIComponent(search)}`;
+  if (state.cursor && append) url += `&cursor=${encodeURIComponent(state.cursor)}`;
+  
+  const data = await apiGet(url);
+  if (data) {
+    const keys = data.keys || [];
+    const formatted = keys.map(k => {
+      let meta = null;
+      if (k.metadata) {
+        try { meta = typeof k.metadata === 'string' ? JSON.parse(k.metadata) : k.metadata; } catch(e) {}
+      }
+      return { name: k.name, metadata: meta, meta };
+    });
+    
+    if (append) {
+      state.images = state.images.concat(formatted);
+    } else {
+      state.images = formatted;
+    }
+    state.cursor = data.list_complete ? null : data.cursor;
+  }
+  
+  state.loading = false;
+  state.loadingMore = false;
+  render();
+}
+
+async function refreshList() {
+  state.cursor = null;
+  await loadImages(false);
+  loadStats();
+}
+
+function loadMore() {
+  if (state.cursor) loadImages(true);
+}
+
+// ─── 操作 ───
+async function copyUrl(name) {
+  const url = `${document.location.origin}/file/${name}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('✅ 已复制链接', 'success');
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    toast('✅ 已复制链接', 'success');
+  }
+}
+
+async function setWhite(name) {
+  const res = await apiGetText(`./api/manage/white/${name}`);
+  if (res) { toast('✅ 已加入白名单', 'success'); refreshList(); }
+}
+
+async function setBlock(name) {
+  const res = await apiGetText(`./api/manage/block/${name}`);
+  if (res) { toast('⛔ 已封禁', 'warning'); refreshList(); }
+}
+
+async function deleteImage(name) {
+  if (!confirm('确认删除这张图片？')) return;
+  const res = await apiGetText(`./api/manage/delete/${name}`);
+  if (res) { toast('🗑️ 已删除', 'info'); refreshList(); }
+}
+
+function previewImage(name) {
+  const modal = document.getElementById('previewModal');
+  const img = document.getElementById('previewImg');
+  img.src = `/file/${name}`;
+  modal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closePreview(e) {
+  if (e && e.target !== e.currentTarget && e.target.closest('.max-w-4xl')) return;
+  document.getElementById('previewModal').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function debounceSearch() {
+  clearTimeout(state.searchTimer);
+  state.searchTimer = setTimeout(() => {
+    state.cursor = null;
+    loadImages(false);
+  }, 400);
+}
+
+function logout() {
+  window.location.href = './api/manage/logout';
+}
+
+// ─── 工具 ───
+function formatSize(bytes) {
+  if (!bytes) return '-';
+  if (bytes < 1024) return bytes + 'B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + 'KB';
+  return (bytes / 1048576).toFixed(1) + 'MB';
+}
+
+function formatTime(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts);
+  const now = new Date();
+  const diff = now - d;
+  if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
+  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+}
+
+function toast(msg, type = 'info') {
+  const el = document.getElementById('toast');
+  const colors = { success: 'bg-green-800 text-green-100', warning: 'bg-yellow-800 text-yellow-100', info: 'bg-gray-800 text-gray-100', error: 'bg-red-800 text-red-100' };
+  el.className = `toast ${colors[type] || colors.info}`;
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.add('hidden'), 2500);
+}
+
+// ─── 初始化 ───
+document.addEventListener('DOMContentLoaded', async () => {
+  // 检查登录状态
+  const check = await apiGetText('./api/manage/check');
+  if (check === null) return; // 已重定向到登录
+  if (check !== 'true') {
+    window.location.href = './api/manage/login';
+    return;
+  }
+  
+  // 加载数据
+  await Promise.all([loadStats(), loadImages(false)]);
+});
+
+// 键盘快捷键
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closePreview();
+});
+</script>
+</body>
 </html>

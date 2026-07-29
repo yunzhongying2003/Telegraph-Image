@@ -1,22 +1,32 @@
+import { extractKey, isShortId } from "../../../utils/helpers";
+
+/**
+ * GET /api/manage/editName/{id}?name=新名称
+ * 修改图片文件名（仅新短 ID 格式支持）
+ */
 export async function onRequest(context) {
-    const { params, env } = context;
+    const { params, env, request } = context;
+    const url = new URL(request.url);
+    const key = extractKey(params.id);
+    const newName = url.searchParams.get('name');
 
-    console.log("Request ID:", params.id);
+    if (!key || !newName) {
+        return new Response('Missing ID or name parameter', { status: 400 });
+    }
 
-    // 获取元数据
-    const value = await env.img_url.getWithMetadata(params.id);
-    console.log("Current metadata:", value);
-
-    // 如果记录不存在
-    if (!value.metadata) return new Response(`Image metadata not found for ID: ${params.id}`, { status: 404 });
-
-    // 更新文件名
-    value.metadata.fileName = params.name;
-    await env.img_url.put(params.id, "", { metadata: value.metadata });
-
-    console.log("Updated metadata:", value.metadata);
-
-    return new Response(JSON.stringify({ success: true, fileName: value.metadata.fileName }), {
-        headers: { 'Content-Type': 'application/json' },
-    });
+    try {
+        if (isShortId(key)) {
+            const record = await env.img_url.getWithMetadata(key);
+            if (record && record.metadata) {
+                record.metadata.file_name = newName;
+                await env.img_url.put(key, '', { metadata: record.metadata });
+                return new Response(JSON.stringify(record.metadata));
+            }
+            return new Response('Not found', { status: 404 });
+        }
+        return new Response('Old format does not support rename', { status: 400 });
+    } catch (e) {
+        console.error('EditName error:', e);
+        return new Response('Internal error', { status: 500 });
+    }
 }
