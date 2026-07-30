@@ -231,7 +231,7 @@ function setFilter(f) {
 
   state.cursor = null;
   state.images = [];
-  loadImages(true);
+  loadImages(false); // 首次加载用 false（非追加）
 }
 
 // ─── 渲染引擎（简易响应式） ───
@@ -382,8 +382,8 @@ async function loadImages(append = false) {
   const search = document.getElementById('searchInput')?.value?.trim() || '';
   let url = `./api/manage/list?limit=50`;
   if (search) url += `&prefix=${encodeURIComponent(search)}`;
-  // 筛选：block/white 走服务端过滤；today 走前端过滤（按时间戳）
-  if (state.filter === 'block' || state.filter === 'white') {
+  // 筛选：block/white/today 走服务端过滤
+  if (state.filter === 'block' || state.filter === 'white' || state.filter === 'today') {
     url += `&filter=${state.filter}`;
   }
   if (state.cursor && append) url += `&cursor=${encodeURIComponent(state.cursor)}`;
@@ -399,16 +399,7 @@ async function loadImages(append = false) {
       return { name: k.name, metadata: meta, meta };
     });
 
-    // today 筛选：前端按时间戳过滤（timestamp 是数字毫秒值）
-        if (state.filter === 'today') {
-          const todayPrefix = new Date().toISOString().slice(0, 10);
-          state.images = state.images.concat(formatted.filter(img => {
-            const ts = img.meta?.upload_time || img.meta?.timestamp || '';
-            if (!ts) return false;
-            const tsDate = typeof ts === 'number' ? new Date(ts).toISOString().slice(0, 10) : String(ts).slice(0, 10);
-            return tsDate === todayPrefix;
-          }));
-    } else if (append) {
+    if (append) {
       state.images = state.images.concat(formatted);
     } else {
       state.images = formatted;
