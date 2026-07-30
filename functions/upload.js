@@ -1,4 +1,4 @@
-import { generateShortId, getFileIdFromResponse, sendToTelegram, moderateImage } from "../utils/helpers";
+import { generateShortId, getFileIdFromResponse, sendToTelegram, moderateImage } from "./utils/helpers";
 
 /**
  * POST /upload — 上传图片（支持多图）
