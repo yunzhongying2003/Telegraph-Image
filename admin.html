@@ -338,23 +338,33 @@ function renderLoadMore() {
 // ─── API 调用 ───
 async function apiGet(path) {
   try {
-    const res = await fetch(path, { credentials: 'include' });
+    const res = await fetch(path + (path.includes('?') ? '&' : '?') + '_t=' + Date.now(), {
+      credentials: 'include',
+      cache: 'no-store',
+    });
     if (res.status === 401) {
       window.location.href = './api/manage/login';
       return null;
     }
+    if (!res.ok) return null;
     return await res.json();
   } catch (e) {
-    toast('请求失败: ' + e.message, 'error');
     return null;
   }
 }
 
 async function apiGetText(path) {
   try {
-    const res = await fetch(path, { credentials: 'include' });
+    const res = await fetch(path + (path.includes('?') ? '&' : '?') + '_t=' + Date.now(), {
+      credentials: 'include',
+      cache: 'no-store',
+    });
     if (res.status === 401) {
       window.location.href = './api/manage/login';
+      return null;
+    }
+    if (!res.ok) {
+      toast(`操作失败 (${res.status})`, 'error');
       return null;
     }
     return await res.text();
