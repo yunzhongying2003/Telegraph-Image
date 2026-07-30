@@ -451,18 +451,77 @@ async function copyUrl(name) {
 
 async function setWhite(name) {
   const res = await apiGetText(`./api/manage/white/${name}`);
-  if (res) { toast('✅ 已加入白名单', 'success'); refreshList(); }
+  if (!res) return;
+  toast('✅ 已加入白名单', 'success');
+  // 乐观更新：本地立即更新该图片的 list_type
+  const img = state.images.find(i => i.name === name);
+  if (img) {
+    const meta = img.metadata || {};
+    const metaObj = typeof meta === 'string' ? (() => { try { return JSON.parse(meta); } catch(e) { return {}; } })() : meta;
+    metaObj.list_type = 'White';
+    metaObj.label = 'whitelist';
+    img.metadata = metaObj;
+    // 更新统计
+    state.stats.whitelisted = (state.stats.whitelisted || 0) + 1;
+    // 如果当前是封禁列表，移除该图片
+    if (state.filter === 'block') {
+      state.images = state.images.filter(i => i.name !== name);
+    }
+    render();
+  }
+  // 后台静默同步
+  loadStats();
 }
 
 async function setBlock(name) {
   const res = await apiGetText(`./api/manage/block/${name}`);
-  if (res) { toast('⛔ 已封禁', 'warning'); refreshList(); }
+  if (!res) return;
+  toast('⛔ 已封禁', 'warning');
+  // 乐观更新：本地立即更新该图片的 list_type
+  const img = state.images.find(i => i.name === name);
+  if (img) {
+    const meta = img.metadata || {};
+    const metaObj = typeof meta === 'string' ? (() => { try { return JSON.parse(meta); } catch(e) { return {}; } })() : meta;
+    metaObj.list_type = 'Block';
+    metaObj.label = 'blocked';
+    img.metadata = metaObj;
+    // 更新统计
+    state.stats.blocked = (state.stats.blocked || 0) + 1;
+    // 如果当前是白名单列表，移除该图片
+    if (state.filter === 'white') {
+      state.images = state.images.filter(i => i.name !== name);
+    }
+    render();
+  }
+  // 后台静默同步
+  loadStats();
 }
 
 async function deleteImage(name) {
   if (!confirm('确认删除这张图片？')) return;
   const res = await apiGetText(`./api/manage/delete/${name}`);
-  if (res) { toast('🗑️ 已删除', 'info'); refreshList(); }
+  if (!res) return;
+  toast('🗑️ 已删除', 'info');
+  // 乐观更新：本地立即移除该图片
+  const removed = state.images.find(i => i.name === name);
+  state.images = state.images.filter(i => i.name !== name);
+  if (removed) {
+    // 更新统计
+    state.stats.total = Math.max(0, (state.stats.total || 0) - 1);
+    // 如果删的是今日上传的，同时减 today
+    const meta = removed.metadata || {};
+    const metaObj = typeof meta === 'string' ? (() => { try { return JSON.parse(meta); } catch(e) { return {}; } })() : meta;
+    if (metaObj.timestamp) {
+      const today = new Date();
+      const ts = new Date(metaObj.timestamp);
+      if (ts.getFullYear() === today.getFullYear() && ts.getMonth() === today.getMonth() && ts.getDate() === today.getDate()) {
+        state.stats.today = Math.max(0, (state.stats.today || 0) - 1);
+      }
+    }
+  }
+  render();
+  // 后台静默同步
+  loadStats();
 }
 
 function previewImage(name) {
