@@ -84,6 +84,46 @@
     </div>
   </div>
 
+  <!-- ── 上传区域 ── -->
+  <div class="max-w-7xl mx-auto px-4 pb-4">
+    <div class="bg-[#1e1e2e] rounded-xl border border-gray-800 overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-3 cursor-pointer select-none" onclick="toggleUpload()">
+        <span class="text-sm font-medium text-gray-300">
+          <span id="uploadArrow">▶</span> 上传图片
+        </span>
+        <span class="text-xs text-gray-600">支持多选，自动过审</span>
+      </div>
+      <div id="uploadPanel" class="hidden px-5 pb-5">
+        <!-- 拖拽区域 -->
+        <div id="dropZone" class="border-2 border-dashed border-gray-700 rounded-xl p-8 text-center transition hover:border-accent-500/50 cursor-pointer"
+             ondragover="event.preventDefault(); this.classList.add('border-accent-500')"
+             ondragleave="this.classList.remove('border-accent-500')"
+             ondrop="handleDrop(event)"
+             onclick="document.getElementById('fileInput').click()">
+          <div class="text-3xl mb-2">📁</div>
+          <div class="text-sm text-gray-400">拖拽图片到此处，或点击选择</div>
+          <div class="text-xs text-gray-600 mt-1">支持 PNG / JPG / WebP / GIF</div>
+          <input id="fileInput" type="file" multiple accept="image/*" class="hidden" onchange="handleFiles(this.files)">
+        </div>
+        <!-- 上传进度 -->
+        <div id="uploadProgress" class="hidden mt-4">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="spinner"></div>
+            <span id="uploadStatus" class="text-sm text-gray-400">上传中...</span>
+          </div>
+          <div class="w-full bg-gray-800 rounded-full h-2">
+            <div id="progressBar" class="bg-accent-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+          </div>
+        </div>
+        <!-- 上传结果 -->
+        <div id="uploadResult" class="hidden mt-4">
+          <div class="text-xs text-gray-500 mb-2">上传结果：</div>
+          <div id="resultList" class="space-y-1 max-h-40 overflow-y-auto"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── 搜索栏 ── -->
   <div class="max-w-7xl mx-auto px-4 pb-4">
     <div class="flex gap-3">
@@ -407,6 +447,105 @@ function debounceSearch() {
 
 function logout() {
   window.location.href = './api/manage/logout';
+}
+
+// ─── 上传 ───
+function toggleUpload() {
+  const panel = document.getElementById('uploadPanel');
+  const arrow = document.getElementById('uploadArrow');
+  const hidden = panel.classList.toggle('hidden');
+  arrow.textContent = hidden ? '▶' : '▼';
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('border-accent-500');
+  handleFiles(e.dataTransfer.files);
+}
+
+function handleFiles(files) {
+  if (!files.length) return;
+  // 重置结果
+  document.getElementById('uploadResult').classList.add('hidden');
+  document.getElementById('resultList').innerHTML = '';
+  // 上传
+  uploadFiles(files);
+}
+
+async function uploadFiles(files) {
+  const panel = document.getElementById('uploadProgress');
+  const status = document.getElementById('uploadStatus');
+  const bar = document.getElementById('progressBar');
+  panel.classList.remove('hidden');
+  
+  const formData = new FormData();
+  let validCount = 0;
+  for (const f of files) {
+    if (f.type.startsWith('image/')) {
+      formData.append('file', f);
+      validCount++;
+    }
+  }
+  if (!validCount) {
+    status.textContent = '没有有效的图片文件';
+    setTimeout(() => panel.classList.add('hidden'), 2000);
+    return;
+  }
+  
+  status.textContent = `上传 ${validCount} 张图片...`;
+  bar.style.width = '30%';
+  
+  try {
+    const res = await fetch('/upload', {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    });
+    bar.style.width = '80%';
+    const data = await res.json();
+    bar.style.width = '100%';
+    
+    setTimeout(() => {
+      panel.classList.add('hidden');
+      bar.style.width = '0%';
+    }, 1500);
+    
+    // 显示结果
+    const resultDiv = document.getElementById('uploadResult');
+    const list = document.getElementById('resultList');
+    resultDiv.classList.remove('hidden');
+    list.innerHTML = '';
+    
+    if (data.results) {
+      let ok = 0, fail = 0;
+      for (const r of data.results) {
+        if (r.src) {
+          ok++;
+          const div = document.createElement('div');
+          div.className = 'flex items-center justify-between text-xs px-2 py-1 rounded bg-green-900/20';
+          div.innerHTML = '<span class="text-green-400">✅ ' + (r.name || '') + '</span>'
+            + '<span class="text-gray-500">' + r.src + '</span>';
+          list.appendChild(div);
+        } else {
+          fail++;
+          const div = document.createElement('div');
+          div.className = 'flex items-center justify-between text-xs px-2 py-1 rounded bg-red-900/20';
+          div.innerHTML = '<span class="text-red-400">❌ ' + (r.name || '') + '</span>'
+            + '<span class="text-gray-500">' + (r.error || '') + '</span>';
+          list.appendChild(div);
+        }
+      }
+      toast(`✅ ${ok} 张成功` + (fail ? `, ${fail} 张失败` : ''), ok > 0 ? 'success' : 'error');
+      if (ok > 0) refreshList(); // 刷新图片列表
+    }
+    if (data.error) {
+      toast('❌ ' + data.error, 'error');
+    }
+  } catch (e) {
+    bar.style.width = '0%';
+    panel.classList.add('hidden');
+    toast('上传失败: ' + e.message, 'error');
+  }
 }
 
 // ─── 工具 ───
