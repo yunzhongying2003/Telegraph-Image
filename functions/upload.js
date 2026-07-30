@@ -34,8 +34,32 @@ export async function onRequestPost(context) {
             if (!authHeader.startsWith('Basic ')) {
                 return new Response(JSON.stringify({ error: 'Unauthorized. Provide Bearer token via Authorization header.' }), {
                     status: 401,
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Basic realm="img_host", charset="UTF-8"' },
                 });
+            }
+            // 验证 Basic Auth 凭证
+            const basicUser = env.BASIC_USER || '';
+            const basicPass = env.BASIC_PASS || '';
+            if (basicUser && basicPass) {
+                const encoded = authHeader.replace('Basic ', '').trim();
+                try {
+                    const decoded = atob(encoded);
+                    const colon = decoded.indexOf(':');
+                    if (colon === -1) throw new Error('invalid');
+                    const user = decoded.substring(0, colon);
+                    const pass = decoded.substring(colon + 1);
+                    if (user !== basicUser || pass !== basicPass) {
+                        return new Response(JSON.stringify({ error: 'Invalid credentials.' }), {
+                            status: 401,
+                            headers: { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Basic realm="img_host", charset="UTF-8"' },
+                        });
+                    }
+                } catch {
+                    return new Response(JSON.stringify({ error: 'Invalid authorization header.' }), {
+                        status: 400,
+                        headers: { 'Content-Type': 'application/json' },
+                    });
+                }
             }
         }
 
