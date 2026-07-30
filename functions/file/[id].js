@@ -60,17 +60,31 @@ export async function onRequest(context) {
 
     if (!response.ok) return response;
 
+    // ── 设置正确的 Content-Type ──
+    const ext = params.id?.split('.').pop()?.toLowerCase() || '';
+    const mimeMap = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+        gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp',
+        svg: 'image/svg+xml', ico: 'image/x-icon',
+        mp4: 'video/mp4', webm: 'video/webm',
+        mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav',
+    };
+    const contentType = mimeMap[ext] || response.headers.get('Content-Type') || 'application/octet-stream';
+    const headers = new Headers(response.headers);
+    headers.set('Content-Type', contentType);
+    headers.set('Cache-Control', 'public, max-age=86400');
+
     // ── 权限检查（仅当有 metadata 时） ──
     if (metadata && env.img_url) {
         const isAdmin = request.headers.get('Referer')?.includes(`${url.origin}/admin`);
         if (metadata.list_type === 'Block' || metadata.label === 'blocked') {
             if (isAdmin) {
-                return response; // 管理员可以查看被封禁的图片
+                return new Response(response.body, { status: response.status, headers });
             }
             return Response.redirect(`${url.origin}/block-img.html`, 302);
         }
         if (metadata.list_type === 'White') {
-            return response; // 白名单直接放行
+            return new Response(response.body, { status: response.status, headers });
         }
 
         // 白名单模式
@@ -79,5 +93,5 @@ export async function onRequest(context) {
         }
     }
 
-    return response;
+    return new Response(response.body, { status: response.status, headers });
 }
