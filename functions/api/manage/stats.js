@@ -29,9 +29,18 @@ export async function onRequest(context) {
                 if (meta.list_type === 'Block' || meta.label === 'blocked') blocked++;
                 if (meta.list_type === 'White') whitelisted++;
 
-                // 今日统计：用 upload_time 或 timestamp 或 created_at
+                // 今日统计：timestamp 是 Date.now() 的数字毫秒值，转成日期字符串比较
                 const ts = meta.upload_time || meta.timestamp || meta.created_at || '';
-                if (String(ts).startsWith(todayPrefix)) today++;
+                if (ts) {
+                    let tsDate = '';
+                    if (typeof ts === 'number') {
+                        tsDate = new Date(ts).toISOString().slice(0, 10);
+                    } else if (typeof ts === 'string') {
+                        // 已经是 YYYY-MM-DD 格式
+                        tsDate = ts.slice(0, 10);
+                    }
+                    if (tsDate === todayPrefix) today++;
+                }
             }
             cursor = result.cursor;
         } while (cursor);
