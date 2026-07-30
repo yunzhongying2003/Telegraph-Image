@@ -22,16 +22,20 @@ export async function onRequestPost(context) {
         // ── 1. API Key 认证 ──
         const authHeader = request.headers.get('Authorization') || '';
         const apiKey = env.API_KEY || '';
-        if (apiKey) {
-            const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-            if (token !== apiKey) {
-                // 也支持 Basic Auth（管理后台用）
-                if (!authHeader.startsWith('Basic ')) {
-                    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-                        status: 401,
-                        headers: { 'Content-Type': 'application/json' },
-                    });
-                }
+        if (!apiKey) {
+            return new Response(JSON.stringify({ error: 'API_KEY not configured. Upload is disabled.' }), {
+                status: 503,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+        if (token !== apiKey) {
+            // 也支持 Basic Auth（管理后台用）
+            if (!authHeader.startsWith('Basic ')) {
+                return new Response(JSON.stringify({ error: 'Unauthorized. Provide Bearer token via Authorization header.' }), {
+                    status: 401,
+                    headers: { 'Content-Type': 'application/json' },
+                });
             }
         }
 
