@@ -1,5 +1,4 @@
 import { extractKey, isShortId } from "../../utils/helpers";
-import { extractKey, isShortId } from "../../utils/helpers";
 
 /**
  * GET /api/manage/list — 列出图片
@@ -61,5 +60,4 @@ export async function onRequest(context) {
         cursor: allKeys.length > limit ? allKeys[limit].name : undefined,
         list_complete: allKeys.length <= limit,
     }), { headers: { 'Content-Type': 'application/json' } });
-}
 }
