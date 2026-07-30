@@ -40,6 +40,13 @@
     .badge-normal { background: #1e293b; color: #94a3b8; }
     .badge-blocked { background: #7f1d1d; color: #fca5a5; }
     .badge-white { background: #14532d; color: #86efac; }
+    .stat-card { cursor: pointer; transition: all 0.15s; }
+    .stat-card:hover { border-color: #6366f1; background: #2a2a3e; }
+    .stat-card.active { border-color: #6366f1; background: #2a2a3e; }
+    .stat-card .text-2xl { transition: color 0.15s; }
+    .filter-badge { display: none; }
+    .filter-badge.show { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; background: #6366f1; color: white; font-size: 12px; font-weight: 500; cursor: pointer; }
+    .filter-badge.show:hover { background: #4f46e5; }
   </style>
 </head>
 <body class="bg-[#11111b] text-gray-200 min-h-screen">
@@ -65,21 +72,21 @@
   <!-- ── 统计面板 ── -->
   <div class="max-w-7xl mx-auto px-4 py-6">
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="bg-[#1e1e2e] rounded-xl p-4 border border-gray-800">
+      <div class="stat-card bg-[#1e1e2e] rounded-xl p-4 border border-gray-800" onclick="setFilter('all')" id="statAll">
         <div class="text-xs text-gray-500 mb-1">总图片数</div>
-        <div class="text-2xl font-bold text-gray-100">{{ stats.total || 0 }}</div>
+        <div class="text-2xl font-bold text-gray-100" id="statTotal">{{ stats.total || 0 }}</div>
       </div>
-      <div class="bg-[#1e1e2e] rounded-xl p-4 border border-gray-800">
+      <div class="stat-card bg-[#1e1e2e] rounded-xl p-4 border border-gray-800" onclick="setFilter('today')" id="statToday">
         <div class="text-xs text-gray-500 mb-1">今日上传</div>
-        <div class="text-2xl font-bold text-accent-400">{{ stats.today || 0 }}</div>
+        <div class="text-2xl font-bold text-accent-400" id="statTodayNum">{{ stats.today || 0 }}</div>
       </div>
-      <div class="bg-[#1e1e2e] rounded-xl p-4 border border-gray-800">
+      <div class="stat-card bg-[#1e1e2e] rounded-xl p-4 border border-gray-800" onclick="setFilter('block')" id="statBlock">
         <div class="text-xs text-gray-500 mb-1">已封禁</div>
-        <div class="text-2xl font-bold text-red-400">{{ stats.blocked || 0 }}</div>
+        <div class="text-2xl font-bold text-red-400" id="statBlockNum">{{ stats.blocked || 0 }}</div>
       </div>
-      <div class="bg-[#1e1e2e] rounded-xl p-4 border border-gray-800">
+      <div class="stat-card bg-[#1e1e2e] rounded-xl p-4 border border-gray-800" onclick="setFilter('white')" id="statWhite">
         <div class="text-xs text-gray-500 mb-1">白名单</div>
-        <div class="text-2xl font-bold text-green-400">{{ stats.whitelisted || 0 }}</div>
+        <div class="text-2xl font-bold text-green-400" id="statWhiteNum">{{ stats.whitelisted || 0 }}</div>
       </div>
     </div>
   </div>
@@ -204,9 +211,28 @@ const state = {
   cursor: null,
   loading: true,
   loadingMore: false,
-  stats: { total: 0, today: 0, blocked: 0, whitelisted: 0, kv_keys: 0 },
+  filter: 'all', // all | block | white | today
+  stats: { total: 0, today: 0, blocked: 0, whitelisted: 0 },
   searchTimer: null,
 };
+
+// ─── 筛选 ───
+function setFilter(f) {
+  state.filter = f;
+  // 高亮当前卡片
+  ['statAll','statToday','statBlock','statWhite'].forEach(id => {
+    document.getElementById(id)?.classList.remove('active');
+  });
+  const map = { all: 'statAll', today: 'statToday', block: 'statBlock', white: 'statWhite' };
+  document.getElementById(map[f])?.classList.add('active');
+
+  // 清除搜索框
+  document.getElementById('searchInput').value = '';
+
+  state.cursor = null;
+  state.images = [];
+  loadImages(true);
+}
 
 // ─── 渲染引擎（简易响应式） ───
 function render() {
@@ -220,14 +246,16 @@ function render() {
 }
 
 function renderStats() {
-  const cards = document.querySelectorAll('.grid.grid-cols-2.md\\:grid-cols-4 > div');
-  if (cards.length >= 4) {
-    cards[0].querySelector('.text-2xl').textContent = state.stats.total || 0;
-    cards[1].querySelector('.text-2xl').textContent = state.stats.today || 0;
-    cards[2].querySelector('.text-2xl').textContent = state.stats.blocked || 0;
-    cards[3].querySelector('.text-2xl').textContent = state.stats.whitelisted || 0;
-  }
-  document.querySelector('nav .text-xs.rounded-full').textContent = `${state.stats.total || 0} 张`;
+  const total = document.getElementById('statTotal');
+  const today = document.getElementById('statTodayNum');
+  const block = document.getElementById('statBlockNum');
+  const white = document.getElementById('statWhiteNum');
+  if (total) total.textContent = state.stats.total || 0;
+  if (today) today.textContent = state.stats.today || 0;
+  if (block) block.textContent = state.stats.blocked || 0;
+  if (white) white.textContent = state.stats.whitelisted || 0;
+  const navBadge = document.querySelector('nav .text-xs.rounded-full');
+  if (navBadge) navBadge.textContent = `${state.stats.total || 0} 张`;
 }
 
 function renderImages() {
@@ -350,12 +378,16 @@ async function loadImages(append = false) {
   if (!append) state.loading = true;
   else state.loadingMore = true;
   render();
-  
+
   const search = document.getElementById('searchInput')?.value?.trim() || '';
   let url = `./api/manage/list?limit=50`;
   if (search) url += `&prefix=${encodeURIComponent(search)}`;
+  // 筛选：block/white 走服务端过滤；today 走前端过滤（按时间戳）
+  if (state.filter === 'block' || state.filter === 'white') {
+    url += `&filter=${state.filter}`;
+  }
   if (state.cursor && append) url += `&cursor=${encodeURIComponent(state.cursor)}`;
-  
+
   const data = await apiGet(url);
   if (data) {
     const keys = data.keys || [];
@@ -366,15 +398,22 @@ async function loadImages(append = false) {
       }
       return { name: k.name, metadata: meta, meta };
     });
-    
-    if (append) {
+
+    // today 筛选：前端按 upload_time / timestamp 过滤
+    if (state.filter === 'today') {
+      const todayPrefix = new Date().toISOString().slice(0, 10);
+      state.images = state.images.concat(formatted.filter(img => {
+        const ts = img.meta?.upload_time || img.meta?.timestamp || '';
+        return String(ts).startsWith(todayPrefix);
+      }));
+    } else if (append) {
       state.images = state.images.concat(formatted);
     } else {
       state.images = formatted;
     }
     state.cursor = data.list_complete ? null : data.cursor;
   }
-  
+
   state.loading = false;
   state.loadingMore = false;
   render();
