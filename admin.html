@@ -394,7 +394,7 @@ async function loadImages(append = false) {
 
   const search = document.getElementById('searchInput')?.value?.trim() || '';
   let url = `./api/manage/list?limit=1000`;
-  if (search) url += `&prefix=${encodeURIComponent(search)}`;
+  if (search) url += `&q=${encodeURIComponent(search)}`;
   // 筛选：block/white/today 走服务端过滤
   if (state.filter === 'block' || state.filter === 'white' || state.filter === 'today') {
     url += `&filter=${state.filter}`;
