@@ -81,20 +81,28 @@ async function errorHandling(context) {
     }else{
         if (context.request.headers.has('Authorization')) {
             const authHeader = context.request.headers.get('Authorization');
-            // 支持 Bearer token（上传 API Key）
-            const apiKey = context.env.API_KEY || '';
-            if (apiKey && authHeader.replace(/^Bearer\s+/i, '').trim() === apiKey) {
-                return context.next();
-            }
-            // 也支持 Basic Auth
-            const { user, pass } = basicAuthentication(context.request);
-            
-                if (context.env.BASIC_USER !== user || context.env.BASIC_PASS !== pass) {
-                    return UnauthorizedException('Invalid credentials.');
-                }else{
+            const scheme = authHeader.split(' ')[0];
+
+            // Bearer token 认证（上传 API Key）
+            if (scheme === 'Bearer') {
+                const apiKey = context.env.API_KEY || '';
+                const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+                if (apiKey && token === apiKey) {
                     return context.next();
                 }
-            
+                return UnauthorizedException('Invalid Bearer token.');
+            }
+
+            // Basic Auth
+            if (scheme === 'Basic') {
+                const { user, pass } = basicAuthentication(context.request);
+                if (context.env.BASIC_USER !== user || context.env.BASIC_PASS !== pass) {
+                    return UnauthorizedException('Invalid credentials.');
+                }
+                return context.next();
+            }
+
+            return UnauthorizedException('Unsupported authorization scheme.');
         } else {
             return new Response('You need to login.', {
                 status: 401,
