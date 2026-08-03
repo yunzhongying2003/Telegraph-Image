@@ -1,4 +1,4 @@
-import { extractKey, isShortId } from "../utils/helpers";
+import { extractKey, isShortId } from "../../../utils/helpers";
 
 /**
  * POST /api/manage/editMeta/{id} — 编辑图片元数据
