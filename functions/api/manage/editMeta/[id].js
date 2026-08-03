@@ -3,12 +3,14 @@ import { extractKey, isShortId } from "../../../utils/helpers";
 /**
  * POST /api/manage/editMeta/{id} — 编辑图片元数据
  * 
+ * 认证: Authorization: Bearer *** 或 Basic Auth（通过 _middleware.js）
+ * 
  * 请求体 (JSON):
  * {
- *   "keywords": ["老挝", "寺庙", "佛像"],  // 关键词数组
- *   "scene": "香通寺金色屋顶全景",           // 一句话场景描述
- *   "file_name": "新文件名",                  // 可选，修改文件名
- *   "label": "travel"                         // 可选，修改标签
+ *   "keywords": ["老挝", "寺庙", "佛像"],
+ *   "scene": "香通寺金色屋顶全景",
+ *   "file_name": "新文件名",
+ *   "label": "travel"
  * }
  * 
  * 返回: 更新后的 metadata 对象
@@ -21,12 +23,26 @@ export async function onRequest(context) {
         return new Response('Missing key or KV namespace', { status: 400 });
     }
     
+    // 支持 Bearer token 认证（与 upload.js 一致）
+    const authHeader = request.headers.get('Authorization') || '';
+    const apiKey = env.API_KEY || '';
+    let authOk = false;
+    if (apiKey) {
+        const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+        if (token === apiKey) authOk = true;
+    }
+    // 也支持 Basic Auth（通过 middleware 已验证）
+    if (authHeader.startsWith('Basic ')) authOk = true;
+    
+    if (!authOk) {
+        return new Response('Unauthorized', { status: 401 });
+    }
+    
     try {
-        // 获取现有 metadata
         let record = await env.img_url.getWithMetadata(key);
         
         if (!record) {
-            // 旧格式（长 ID）：创建新的 KV 记录
+            // 旧格式或无记录：创建新记录
             const meta = await request.json();
             const now = Date.now();
             const newMeta = {
@@ -53,7 +69,7 @@ export async function onRequest(context) {
         
         const updatedMeta = {
             ...existingMeta,
-            ...(meta.keywords !== undefined && { keywords: meta.keywords }),
+            ...(meta.keywords !== undefined && { keywords: Array.isArray(meta.keywords) ? meta.keywords : [] }),
             ...(meta.scene !== undefined && { scene: meta.scene }),
             ...(meta.file_name && { file_name: meta.file_name }),
             ...(meta.label && { label: meta.label }),
@@ -66,6 +82,6 @@ export async function onRequest(context) {
         });
     } catch (e) {
         console.error('EditMeta error:', e);
-        return new Response('Internal error', { status: 500 });
+        return new Response('Internal error: ' + e.message, { status: 500 });
     }
 }
