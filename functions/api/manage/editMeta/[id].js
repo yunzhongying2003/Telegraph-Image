@@ -23,20 +23,7 @@ export async function onRequest(context) {
         return new Response('Missing key or KV namespace', { status: 400 });
     }
     
-    // 支持 Bearer token 认证（与 upload.js 一致）
-    const authHeader = request.headers.get('Authorization') || '';
-    const apiKey = env.API_KEY || '';
-    let authOk = false;
-    if (apiKey) {
-        const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-        if (token === apiKey) authOk = true;
-    }
-    // 也支持 Basic Auth（通过 middleware 已验证）
-    if (authHeader.startsWith('Basic ')) authOk = true;
-    
-    if (!authOk) {
-        return new Response('Unauthorized', { status: 401 });
-    }
+    // 认证已由 _middleware.js 处理，此处信任上下文
     
     try {
         let record = await env.img_url.getWithMetadata(key);

@@ -2,8 +2,9 @@ import { extractKey, isShortId } from "../../utils/helpers";
 
 /**
  * GET /api/manage/list — 列出图片
- * 参数: limit, cursor, prefix, filter
+ * 参数: limit, cursor, prefix, filter, q
  * filter: all | block | white | today
+ * q:     搜索关键词，匹配 file_name / keywords / scene / label / 文件ID
  */
 export async function onRequest(context) {
     const { request, env } = context;
@@ -15,7 +16,11 @@ export async function onRequest(context) {
 
     const reqCursor = url.searchParams.get('cursor') || undefined;
     const prefix = url.searchParams.get('prefix') || undefined;
+    const q = url.searchParams.get('q') || undefined;
     const filter = url.searchParams.get('filter') || 'all';
+    
+    // 元数据搜索关键词（转小写便于匹配）
+    const searchTerms = q ? q.toLowerCase().split(/[\s,，]+/).filter(t => t) : [];
 
     // 短 ID 前缀模式：直接按 prefix 查询
     if (prefix && prefix.length <= 12) {
@@ -41,19 +46,34 @@ export async function onRequest(context) {
         const result = await env.img_url.list({ limit: 1000, cursor: kvCursor });
         const filtered = (result.keys || []).filter(k => {
             if (k.name.startsWith('_')) return false;
-            if (filter === 'all') return true;
-            const meta = k.metadata || {};
-            const listType = meta.list_type || '';
-            const label = meta.label || '';
-            if (filter === 'block') return listType === 'Block' || label === 'blocked';
-            if (filter === 'white') return listType === 'White';
-            if (filter === 'today') {
-                const ts = meta.upload_time || meta.timestamp || meta.created_at || '';
-                if (!ts) return false;
-                const tsDate = typeof ts === 'number'
-                    ? new Date(ts).toISOString().slice(0, 10)
-                    : String(ts).slice(0, 10);
-                return tsDate === todayPrefix;
+            if (filter === 'all') { /* pass through */ }
+            else {
+                const meta = k.metadata || {};
+                const listType = meta.list_type || '';
+                const label = meta.label || '';
+                if (filter === 'block') return listType === 'Block' || label === 'blocked';
+                if (filter === 'white') return listType === 'White';
+                if (filter === 'today') {
+                    const ts = meta.upload_time || meta.timestamp || meta.created_at || '';
+                    if (!ts) return false;
+                    const tsDate = typeof ts === 'number'
+                        ? new Date(ts).toISOString().slice(0, 10)
+                        : String(ts).slice(0, 10);
+                    return tsDate === todayPrefix;
+                }
+            }
+            // 元数据搜索：匹配 file_name / keywords / scene / label / name
+            if (searchTerms.length > 0) {
+                const meta = k.metadata || {};
+                const haystack = [
+                    meta.file_name || '',
+                    (meta.keywords || []).join(' '),
+                    meta.scene || '',
+                    meta.label || '',
+                    k.name || '',
+                ].join(' ').toLowerCase();
+                const match = searchTerms.every(term => haystack.includes(term));
+                if (!match) return false;
             }
             return true;
         });

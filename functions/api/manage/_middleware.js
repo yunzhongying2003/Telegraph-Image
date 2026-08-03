@@ -80,10 +80,15 @@ async function errorHandling(context) {
         return context.next();
     }else{
         if (context.request.headers.has('Authorization')) {
-            // Throws exception when authorization fails.
+            const authHeader = context.request.headers.get('Authorization');
+            // 支持 Bearer token（上传 API Key）
+            const apiKey = context.env.API_KEY || '';
+            if (apiKey && authHeader.replace(/^Bearer\s+/i, '').trim() === apiKey) {
+                return context.next();
+            }
+            // 也支持 Basic Auth
             const { user, pass } = basicAuthentication(context.request);
             
-                          
                 if (context.env.BASIC_USER !== user || context.env.BASIC_PASS !== pass) {
                     return UnauthorizedException('Invalid credentials.');
                 }else{
