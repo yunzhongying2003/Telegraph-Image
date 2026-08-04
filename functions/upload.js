@@ -127,6 +127,8 @@ export async function onRequestPost(context) {
                                 list_type: 'Block',
                                 label: moderation.label || 'blocked',
                                 liked: false,
+                                keywords: extraKeywords,
+                                scene: extraScene,
                             }
                         });
                         results.push({ src: `/file/${shortId}.${ext}`, name: fileName, size: fileSize, blocked: true, reason: moderation.label });
@@ -134,7 +136,23 @@ export async function onRequestPost(context) {
                     }
                 }
 
-                // 3d. 存 KV（短 ID → 元数据）
+                // 3d. 解析上传时传入的额外元数据（可选）
+                let extraKeywords = [];
+                let extraScene = '';
+                let extraLabel = 'normal';
+                try {
+                    const rawKeywords = formData.get('keywords');
+                    const rawScene = formData.get('scene');
+                    const rawLabel = formData.get('label');
+                    if (rawKeywords) {
+                        extraKeywords = JSON.parse(rawKeywords);
+                        if (!Array.isArray(extraKeywords)) extraKeywords = [];
+                    }
+                    if (rawScene) extraScene = rawScene;
+                    if (rawLabel) extraLabel = rawLabel;
+                } catch {}
+                
+                // 3e. 存 KV（短 ID → 元数据）
                 const now = Date.now();
                 await env.img_url.put(shortId, '', {
                     metadata: {
@@ -144,8 +162,10 @@ export async function onRequestPost(context) {
                         ext: ext,
                         timestamp: now,
                         list_type: 'None',
-                        label: 'normal',
+                        label: extraLabel,
                         liked: false,
+                        keywords: extraKeywords,
+                        scene: extraScene,
                     }
                 });
 
