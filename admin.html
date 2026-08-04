@@ -291,16 +291,15 @@ function renderImages() {
     const fileName = metaObj.file_name || img.name;
     const fileSize = metaObj.file_size || 0;
     const timestamp = metaObj.timestamp || 0;
-    
+    const ext = (metaObj.ext || '').toLowerCase() || (fileName.split('.').pop() || '').toLowerCase();
     const badgeClass = listType === 'Block' ? 'badge-blocked' : (listType === 'White' ? 'badge-white' : 'badge-normal');
     const badgeText = listType === 'Block' ? '封禁' : (listType === 'White' ? '白名单' : label);
-    
-    const ext = metaObj.ext || '';
+
     const nameEscaped = img.name.replace(/'/g, "\\'");
     const extEscaped = ext.replace(/'/g, "\\'");
-    
+
     html += `<div class="img-card bg-[#1e1e2e] rounded-xl overflow-hidden border border-gray-800/60 relative group">
-      <div class="relative cursor-pointer" onclick="previewImage('${nameEscaped}')">
+      <div class="relative cursor-pointer" onclick="previewImage('${nameEscaped}','${extEscaped}')">
         <img src="/file/${nameEscaped}${ext ? '.' + ext : ''}" alt="${fileName}" class="w-full h-auto" loading="lazy"
              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'flex items-center justify-center h-32 text-gray-600 text-sm\\'>加载失败</div>'">
         <div class="absolute top-2 left-2 flex gap-1">
@@ -717,6 +716,10 @@ function openMetaEdit(name) {
     const meta = img.metadata || {};
     metaObj = typeof meta === 'string' ? (() => { try { return JSON.parse(meta); } catch(e) { return {}; } })() : meta;
     ext = metaObj.ext || '';
+    if (!ext) {
+      const fn = metaObj.file_name || name;
+      ext = (fn.split('.').pop() || '').toLowerCase();
+    }
   }
 
   const url = `/file/${name}${ext ? '.' + ext : ''}`;
