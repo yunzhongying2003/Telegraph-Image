@@ -153,8 +153,8 @@
     <div v-else class="grid-masonry">
       <div v-for="(img, idx) in images" :key="img.name" class="img-card bg-[#1e1e2e] rounded-xl overflow-hidden border border-gray-800/60 relative group">
         <!-- 缩略图 -->
-        <div class="relative cursor-pointer" onclick="previewImage('{{ img.name }}')">
-          <img :src="'/file/' + img.name" :alt="img.meta?.file_name || img.name" class="w-full h-auto" loading="lazy"
+        <div class="relative cursor-pointer" onclick="previewImage('{{ img.name }}', '{{ img.meta?.ext || '' }}')">
+          <img :src="'/file/' + img.name + (img.meta?.ext ? '.' + img.meta?.ext : '')" :alt="img.meta?.file_name || img.name" class="w-full h-auto" loading="lazy"
                onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'flex items-center justify-center h-32 text-gray-600 text-sm\\'>加载失败</div>'">
           <div class="absolute top-2 left-2 flex gap-1">
             <span v-if="img.meta?.list_type === 'Block'" class="badge badge-blocked">封禁</span>
@@ -173,7 +173,7 @@
           </div>
           <!-- 操作按钮 -->
           <div class="actions flex gap-1 mt-2 pt-2 border-t border-gray-800/60">
-            <button onclick="copyUrl('{{ img.name }}')" class="flex-1 py-1.5 text-xs rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition">复制</button>
+            <button onclick="copyUrl('{{ img.name }}', '{{ img.meta?.ext || '' }}')" class="flex-1 py-1.5 text-xs rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition">复制</button>
             <button v-if="img.meta?.list_type !== 'White'" onclick="setWhite('{{ img.name }}')" class="flex-1 py-1.5 text-xs rounded-lg bg-green-900/30 hover:bg-green-900/50 text-green-400 transition">白名单</button>
             <button v-if="img.meta?.list_type !== 'Block'" onclick="setBlock('{{ img.name }}')" class="flex-1 py-1.5 text-xs rounded-lg bg-red-900/30 hover:bg-red-900/50 text-red-400 transition">封禁</button>
             <button onclick="deleteImage('{{ img.name }}')" class="flex-1 py-1.5 text-xs rounded-lg bg-gray-800 hover:bg-red-900/50 text-gray-400 hover:text-red-400 transition">删除</button>
@@ -295,11 +295,13 @@ function renderImages() {
     const badgeClass = listType === 'Block' ? 'badge-blocked' : (listType === 'White' ? 'badge-white' : 'badge-normal');
     const badgeText = listType === 'Block' ? '封禁' : (listType === 'White' ? '白名单' : label);
     
+    const ext = metaObj.ext || '';
     const nameEscaped = img.name.replace(/'/g, "\\'");
+    const extEscaped = ext.replace(/'/g, "\\'");
     
     html += `<div class="img-card bg-[#1e1e2e] rounded-xl overflow-hidden border border-gray-800/60 relative group">
       <div class="relative cursor-pointer" onclick="previewImage('${nameEscaped}')">
-        <img src="/file/${nameEscaped}" alt="${fileName}" class="w-full h-auto" loading="lazy"
+        <img src="/file/${nameEscaped}${ext ? '.' + ext : ''}" alt="${fileName}" class="w-full h-auto" loading="lazy"
              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'flex items-center justify-center h-32 text-gray-600 text-sm\\'>加载失败</div>'">
         <div class="absolute top-2 left-2 flex gap-1">
           <span class="badge ${badgeClass}">${badgeText}</span>
@@ -314,7 +316,7 @@ function renderImages() {
           <span>${formatTime(timestamp)}</span>
         </div>
         <div class="actions flex gap-1 mt-2 pt-2 border-t border-gray-800/60">
-          <button onclick="copyUrl('${nameEscaped}')" class="flex-1 py-1.5 text-xs rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition">复制</button>
+          <button onclick="copyUrl('${nameEscaped}','${extEscaped}')" class="flex-1 py-1.5 text-xs rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition">复制</button>
           <button onclick="openMetaEdit('${nameEscaped}')" class="flex-1 py-1.5 text-xs rounded-lg bg-blue-900/30 hover:bg-blue-900/50 text-blue-400 transition">🏷 标注</button>
           ${listType !== 'White' ? `<button onclick="setWhite('${nameEscaped}')" class="flex-1 py-1.5 text-xs rounded-lg bg-green-900/30 hover:bg-green-900/50 text-green-400 transition">白名单</button>` : ''}
           ${listType !== 'Block' ? `<button onclick="setBlock('${nameEscaped}')" class="flex-1 py-1.5 text-xs rounded-lg bg-red-900/30 hover:bg-red-900/50 text-red-400 transition">封禁</button>` : ''}
@@ -436,8 +438,8 @@ function loadMore() {
 }
 
 // ─── 操作 ───
-async function copyUrl(name) {
-  const url = `${document.location.origin}/file/${name}`;
+async function copyUrl(name, ext) {
+  const url = `${document.location.origin}/file/${name}${ext ? '.' + ext : ''}`;
   try {
     await navigator.clipboard.writeText(url);
     toast('✅ 已复制链接', 'success');
@@ -527,10 +529,10 @@ async function deleteImage(name) {
   loadStats();
 }
 
-function previewImage(name) {
+function previewImage(name, ext) {
   const modal = document.getElementById('previewModal');
   const img = document.getElementById('previewImg');
-  img.src = `/file/${name}`;
+  img.src = `/file/${name}${ext ? '.' + ext : ''}`;
   modal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
 }
@@ -710,18 +712,22 @@ function openMetaEdit(name) {
   // 找对应图片的 metadata
   const img = state.images.find(i => i.name === name);
   let metaObj = {};
+  let ext = '';
   if (img) {
     const meta = img.metadata || {};
     metaObj = typeof meta === 'string' ? (() => { try { return JSON.parse(meta); } catch(e) { return {}; } })() : meta;
+    ext = metaObj.ext || '';
   }
-  
+
+  const url = `/file/${name}${ext ? '.' + ext : ''}`;
+
   const html = `
   <div class="bg-[#1e1e2e] rounded-xl p-4 max-w-lg w-full overflow-auto max-h-[80vh]">
     <div class="flex items-center justify-between mb-4">
       <h3 class="text-sm font-semibold text-gray-200">🏷 编辑元数据</h3>
       <button onclick="closeMetaEdit()" class="p-1 text-gray-500 hover:text-gray-300">✕</button>
     </div>
-    <img src="/file/${name}" class="w-full h-auto max-h-48 rounded-lg object-contain mb-3 bg-black" onerror="this.style.display='none'">
+    <img src="${url}" class="w-full h-auto max-h-48 rounded-lg object-contain mb-3 bg-black" onerror="this.style.display='none'">
     <div class="text-xs text-gray-500 mb-3 truncate">${metaObj.file_name || name}</div>
     <div class="mb-3">
       <label class="block text-xs text-gray-400 mb-1">关键词（逗号分隔）</label>
